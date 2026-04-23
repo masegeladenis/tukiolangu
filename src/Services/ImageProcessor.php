@@ -86,10 +86,15 @@ class ImageProcessor
         }
 
         // Build label lines to draw below the QR code
+        // Order: ticket type → guest count → name
         // GD built-in font metrics: font5 = 9×15px, font3 = 7×13px
         $labelLines = [];
         if (!empty($labels['ticket_type'])) {
             $labelLines[] = ['text' => strtoupper($labels['ticket_type']), 'font' => 5];
+        }
+        if (isset($labels['guests'])) {
+            $guestCount = (int) $labels['guests'];
+            $labelLines[] = ['text' => 'Guests: ' . $guestCount, 'font' => 3];
         }
         if (!empty($labels['name'])) {
             // Truncate long names so they fit within the QR width
@@ -98,9 +103,6 @@ class ImageProcessor
                 ? substr($labels['name'], 0, $maxChars - 1) . '…'
                 : $labels['name'];
             $labelLines[] = ['text' => $name, 'font' => 3];
-        }
-        if (!empty($labels['guests']) && (int) $labels['guests'] > 1) {
-            $labelLines[] = ['text' => 'Guests: ' . (int) $labels['guests'], 'font' => 3];
         }
 
         // Calculate extra vertical space needed for labels
