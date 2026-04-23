@@ -86,8 +86,16 @@ class ExcelReader
             'tel' => 'phone',
             'ticket' => 'ticket_type',
             'ticket type' => 'ticket_type',
+            'ticket_type' => 'ticket_type',
             'type' => 'ticket_type',
             'category' => 'ticket_type',
+            'class' => 'ticket_type',
+            'tier' => 'ticket_type',
+            'seat type' => 'ticket_type',
+            'seat' => 'ticket_type',
+            'pass type' => 'ticket_type',
+            'pass' => 'ticket_type',
+            'invitation type' => 'ticket_type',
             'guest count' => 'guests',
             'number of guests' => 'guests',
             'pax' => 'guests',
@@ -177,8 +185,8 @@ class ExcelReader
             $data['name'] = 'Unknown';
         }
 
-        // Ensure ticket type is not empty
-        if (empty($data['ticket_type'])) {
+        // Ensure ticket type is not empty (use strlen to avoid '0' being treated as empty)
+        if ($data['ticket_type'] === '') {
             $data['ticket_type'] = 'Standard';
         }
 

@@ -95,14 +95,25 @@ ob_start();
             <div id="currentItem" style="margin-top: 8px; color: #6b7280; font-size: 14px;"></div>
         </div>
         
-        <!-- Error Section -->
+        <!-- Fatal Error Section -->
         <div id="errorSection" style="display: none; margin: 16px 0;">
             <div class="alert alert-danger">
                 <i class="fas fa-exclamation-circle"></i>
-                <span id="errorMessage"></span>
+                <strong>Processing stopped:</strong> <span id="errorMessage"></span>
             </div>
         </div>
-        
+
+        <!-- Row-level Errors Log -->
+        <div id="rowErrorSection" style="display: none; margin: 16px 0;">
+            <div style="background: #fff7ed; border: 1px solid #f97316; border-radius: 8px; padding: 12px 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <strong style="color: #c2410c;"><i class="fas fa-exclamation-triangle"></i> Rows skipped due to errors (<span id="rowErrorCount">0</span>)</strong>
+                    <button type="button" onclick="document.getElementById('rowErrorList').style.display = document.getElementById('rowErrorList').style.display === 'none' ? 'block' : 'none'" style="background: none; border: none; color: #c2410c; cursor: pointer; font-size: 13px;">Show / Hide</button>
+                </div>
+                <ul id="rowErrorList" style="margin: 0; padding-left: 18px; font-size: 13px; color: #7c2d12;"></ul>
+            </div>
+        </div>
+
         <!-- Success Section -->
         <div id="successSection" style="display: none; margin: 16px 0;">
             <div class="alert alert-success">
@@ -147,6 +158,10 @@ const totalCards = <?= $batch['total_cards'] ?>;
 const basePath = '<?= $basePath ?>';
 let isProcessing = false;
 let processingComplete = false;
+
+function escapeHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
 async function startProcessing() {
     if (isProcessing) return;
@@ -259,15 +274,41 @@ function updateProgress(data) {
     const errorSection = document.getElementById('errorSection');
     const errorMessage = document.getElementById('errorMessage');
     
-    if (data.type === 'progress') {
+    if (data.type === 'start') {
+        // Server confirmed total count before processing begins
+        if (progressCount) progressCount.textContent = '0 / ' + data.total;
+
+    } else if (data.type === 'progress') {
         const percent = Math.round((data.current / data.total) * 100);
         if (progressBar) progressBar.style.width = percent + '%';
         if (progressPercent) progressPercent.textContent = percent + '%';
         if (progressCount) progressCount.textContent = data.current + ' / ' + data.total;
         if (progressLabel) progressLabel.textContent = 'Generating cards...';
         if (data.name && currentItem) {
-            currentItem.innerHTML = '<i class="fas fa-user"></i> ' + data.name;
+            currentItem.innerHTML = '<i class="fas fa-user"></i> ' + escapeHtml(data.name);
         }
+
+    } else if (data.type === 'row_error') {
+        // A single row failed — log it visibly without stopping progress
+        const rowErrorSection = document.getElementById('rowErrorSection');
+        const rowErrorList    = document.getElementById('rowErrorList');
+        const rowErrorCount   = document.getElementById('rowErrorCount');
+        if (rowErrorSection) rowErrorSection.style.display = 'block';
+        if (rowErrorList) {
+            const li = document.createElement('li');
+            li.style.marginBottom = '4px';
+            li.innerHTML = '<strong>Row ' + data.row + (data.name ? ' — ' + escapeHtml(data.name) : '') + ':</strong> ' + escapeHtml(data.reason);
+            rowErrorList.appendChild(li);
+        }
+        if (rowErrorCount) rowErrorCount.textContent = parseInt(rowErrorCount.textContent || 0) + 1;
+        // Still update the progress bar position
+        if (data.total) {
+            const percent = Math.round((data.current / data.total) * 100);
+            if (progressBar) progressBar.style.width = percent + '%';
+            if (progressPercent) progressPercent.textContent = percent + '%';
+            if (progressCount) progressCount.textContent = data.current + ' / ' + data.total;
+        }
+
     } else if (data.type === 'complete') {
         // Mark as complete to prevent error handler from triggering
         processingComplete = true;
@@ -288,7 +329,8 @@ function updateProgress(data) {
         }
         
         if (successSection) successSection.style.display = 'block';
-        if (successMessage) successMessage.textContent = 'Successfully processed ' + data.processed + ' cards!';
+        const skipped = data.errors || 0;
+        if (successMessage) successMessage.textContent = 'Successfully processed ' + data.processed + ' card' + (data.processed !== 1 ? 's' : '') + (skipped > 0 ? '. ' + skipped + ' row' + (skipped !== 1 ? 's' : '') + ' were skipped (see errors above).' : '.');
         
         // Hide processing button, show download button
         if (startBtn) {
