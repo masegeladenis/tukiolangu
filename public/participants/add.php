@@ -14,7 +14,7 @@ use App\Database\Connection;
 use App\Services\QRCodeGenerator;
 
 Session::start();
-Auth::requireAdmin();
+Auth::requirePermission('participants_manage');
 
 $db = Connection::getInstance();
 

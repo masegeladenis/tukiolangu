@@ -9,7 +9,7 @@ use App\Helpers\Utils;
 use App\Database\Connection;
 
 Session::start();
-Auth::requireAdmin();
+Auth::requirePermission('users_manage');
 
 $db = Connection::getInstance();
 $pageTitle = 'User Management';

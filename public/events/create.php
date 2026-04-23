@@ -9,7 +9,7 @@ use App\Helpers\Utils;
 use App\Database\Connection;
 
 Session::start();
-Auth::requireAdmin();
+Auth::requirePermission('events_manage');
 
 $db = Connection::getInstance();
 $pageTitle = 'Create Event';

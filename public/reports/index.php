@@ -9,52 +9,62 @@ use App\Helpers\Utils;
 use App\Database\Connection;
 
 Session::start();
-Auth::requireAdmin();
+Auth::requirePermission('reports');
 
 $db = Connection::getInstance();
 $pageTitle = 'Reports & Analytics';
 
-// Get all events
-$events = $db->query("
-    SELECT 
-        e.*,
-        COUNT(DISTINCT p.id) as participant_count,
-        COALESCE(SUM(p.total_guests), 0) as total_guests,
-        COALESCE(SUM(p.guests_checked_in), 0) as guests_checked_in
-    FROM events e
-    LEFT JOIN participants p ON e.id = p.event_id AND p.status = 'active'
-    GROUP BY e.id
-    ORDER BY e.event_date DESC
-");
+// Scope all data to assigned events
+$assignedIds  = Auth::getAssignedEventIds();
+$pdo          = $db->getConnection();
+$events       = [];
+$todayCheckins = [];
+$ticketStats   = [];
 
-// Get today's check-ins
-$todayCheckins = $db->query("
-    SELECT 
-        cl.created_at,
-        cl.guests_this_checkin,
-        p.name,
-        p.unique_id,
-        e.event_name
-    FROM checkin_logs cl
-    JOIN participants p ON cl.participant_id = p.id
-    JOIN events e ON cl.event_id = e.id
-    WHERE DATE(cl.created_at) = CURDATE() AND cl.action = 'check_in'
-    ORDER BY cl.created_at DESC
-    LIMIT 50
-");
+if (!empty($assignedIds)) {
+    $in = implode(',', array_fill(0, count($assignedIds), '?'));
 
-// Get ticket type breakdown
-$ticketStats = $db->query("
-    SELECT 
-        ticket_type,
-        COUNT(*) as count,
-        SUM(total_guests) as total_guests,
-        SUM(guests_checked_in) as checked_in
-    FROM participants
-    WHERE status = 'active'
-    GROUP BY ticket_type
-    ORDER BY count DESC
-");
+    $s = $pdo->prepare("
+        SELECT e.*,
+            COUNT(DISTINCT p.id) as participant_count,
+            COALESCE(SUM(p.total_guests), 0) as total_guests,
+            COALESCE(SUM(p.guests_checked_in), 0) as guests_checked_in
+        FROM events e
+        LEFT JOIN participants p ON e.id = p.event_id AND p.status = 'active'
+        WHERE e.id IN ($in)
+        GROUP BY e.id
+        ORDER BY e.event_date DESC
+    ");
+    $s->execute($assignedIds);
+    $events = $s->fetchAll();
+
+    $s2 = $pdo->prepare("
+        SELECT cl.created_at, cl.guests_this_checkin,
+               p.name, p.unique_id, e.event_name
+        FROM checkin_logs cl
+        JOIN participants p ON cl.participant_id = p.id
+        JOIN events e ON cl.event_id = e.id
+        WHERE DATE(cl.created_at) = CURDATE() AND cl.action = 'check_in'
+        AND cl.event_id IN ($in)
+        ORDER BY cl.created_at DESC
+        LIMIT 50
+    ");
+    $s2->execute($assignedIds);
+    $todayCheckins = $s2->fetchAll();
+
+    $s3 = $pdo->prepare("
+        SELECT ticket_type,
+               COUNT(*) as count,
+               SUM(total_guests) as total_guests,
+               SUM(guests_checked_in) as checked_in
+        FROM participants
+        WHERE status = 'active' AND event_id IN ($in)
+        GROUP BY ticket_type
+        ORDER BY count DESC
+    ");
+    $s3->execute($assignedIds);
+    $ticketStats = $s3->fetchAll();
+}
 
 ob_start();
 ?>

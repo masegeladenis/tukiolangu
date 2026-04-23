@@ -11,7 +11,7 @@ use App\Services\PDFGenerator;
 use App\Services\ZipGenerator;
 
 Session::start();
-Auth::requireAdmin();
+Auth::requirePermission('batches');
 
 $db = Connection::getInstance();
 $batchId = (int) ($_GET['id'] ?? 0);

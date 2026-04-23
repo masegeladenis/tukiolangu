@@ -10,7 +10,7 @@ use App\Database\Connection;
 use App\Services\ExcelReader;
 
 Session::start();
-Auth::requireAdmin();
+Auth::requirePermission('batches');
 
 $db = Connection::getInstance();
 $pageTitle = 'Upload Card Design & Participant List';

@@ -13,7 +13,7 @@ use App\Helpers\Utils;
 use App\Services\SmsService;
 
 Session::start();
-Auth::requireAdmin();
+Auth::requirePermission('sms');
 
 $pageTitle = 'SMS Test';
 $result = null;

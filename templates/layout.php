@@ -42,7 +42,6 @@ $basePath = Utils::basePath();
                     <span>Dashboard</span>
                 </a>
                 
-                <?php if (Auth::isAdmin()): ?>
                 <a href="<?= $basePath ?>/events/index.php" class="nav-item <?= strpos($_SERVER['REQUEST_URI'], '/events/') !== false ? 'active' : '' ?>">
                     <i class="fas fa-calendar-alt"></i>
                     <span>Events</span>
@@ -52,34 +51,55 @@ $basePath = Utils::basePath();
                     <i class="fas fa-upload"></i>
                     <span>Upload Cards</span>
                 </a>
-                <?php endif; ?>
                 
-                <a href="<?= $basePath ?>/participants/index.php" class="nav-item <?= strpos($_SERVER['REQUEST_URI'], '/participants/') !== false ? 'active' : '' ?>">
+                    <?php if (Auth::hasPermission('events_view')): ?>
+                    <a href="<?= $basePath ?>/events/index.php" class="nav-item <?= strpos($_SERVER['REQUEST_URI'], '/events/') !== false ? 'active' : '' ?>">
+                        <i class="fas fa-calendar-alt"></i>
+                        <span>Events</span>
+                    </a>
+                    <?php endif; ?>
+
+                    <?php if (Auth::hasPermission('batches')): ?>
+                    <a href="<?= $basePath ?>/batches/upload.php" class="nav-item <?= strpos($_SERVER['REQUEST_URI'], '/batches/') !== false ? 'active' : '' ?>">
+                        <i class="fas fa-upload"></i>
+                        <span>Upload Cards</span>
+                    </a>
+                    <?php endif; ?>
+
+                    <?php if (Auth::hasAnyPermission(['participants_view','participants_manage','participants_checkin'])): ?>
+                    <a href="<?= $basePath ?>/participants/index.php" class="nav-item <?= strpos($_SERVER['REQUEST_URI'], '/participants/') !== false ? 'active' : '' ?>">
                     <i class="fas fa-users"></i>
                     <span>Participants</span>
                 </a>
-                
-                <a href="<?= $basePath ?>/scanner/index.php" class="nav-item <?= strpos($_SERVER['REQUEST_URI'], '/scanner/') !== false ? 'active' : '' ?>">
+                    <?php endif; ?>
+
+                    <?php if (Auth::hasPermission('scanner')): ?>
+                    <a href="<?= $basePath ?>/scanner/index.php" class="nav-item <?= strpos($_SERVER['REQUEST_URI'], '/scanner/') !== false ? 'active' : '' ?>">
                     <i class="fas fa-camera"></i>
                     <span>Scanner</span>
                 </a>
-                
-                <?php if (Auth::isAdmin()): ?>
-                <a href="<?= $basePath ?>/reports/index.php" class="nav-item <?= strpos($_SERVER['REQUEST_URI'], '/reports/') !== false ? 'active' : '' ?>">
+                    <?php endif; ?>
+
+                    <?php if (Auth::hasPermission('reports')): ?>
+                    <a href="<?= $basePath ?>/reports/index.php" class="nav-item <?= strpos($_SERVER['REQUEST_URI'], '/reports/') !== false ? 'active' : '' ?>">
                     <i class="fas fa-chart-bar"></i>
                     <span>Reports</span>
                 </a>
-                
-                <a href="<?= $basePath ?>/sms/test.php" class="nav-item <?= strpos($_SERVER['REQUEST_URI'], '/sms/') !== false ? 'active' : '' ?>">
+                    <?php endif; ?>
+
+                    <?php if (Auth::hasPermission('sms')): ?>
+                    <a href="<?= $basePath ?>/sms/test.php" class="nav-item <?= strpos($_SERVER['REQUEST_URI'], '/sms/') !== false ? 'active' : '' ?>">
                     <i class="fas fa-sms"></i>
                     <span>SMS</span>
                 </a>
+                    <?php endif; ?>
 
-                <a href="<?= $basePath ?>/users/index.php" class="nav-item <?= strpos($_SERVER['REQUEST_URI'], '/users/') !== false ? 'active' : '' ?>">
+                    <?php if (Auth::hasPermission('users_manage')): ?>
+                    <a href="<?= $basePath ?>/users/index.php" class="nav-item <?= strpos($_SERVER['REQUEST_URI'], '/users/') !== false ? 'active' : '' ?>">
                     <i class="fas fa-user-cog"></i>
                     <span>Users</span>
                 </a>
-                <?php endif; ?>
+                    <?php endif; ?>
             </nav>
             
             <div class="sidebar-footer">

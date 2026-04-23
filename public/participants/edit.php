@@ -13,7 +13,7 @@ use App\Helpers\Utils;
 use App\Database\Connection;
 
 Session::start();
-Auth::requireAdmin();
+Auth::requirePermission('participants_manage');
 
 $db = Connection::getInstance();
 $participantId = (int) ($_GET['id'] ?? 0);

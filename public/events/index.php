@@ -9,23 +9,31 @@ use App\Helpers\Utils;
 use App\Database\Connection;
 
 Session::start();
-Auth::requireAdmin();
+Auth::requirePermission('events_view');
 
 $db = Connection::getInstance();
 $pageTitle = 'Events';
 
-// Get all events with stats
-$events = $db->query("
-    SELECT 
-        e.*,
-        COUNT(DISTINCT p.id) as participant_count,
-        COALESCE(SUM(p.total_guests), 0) as total_guests,
-        COALESCE(SUM(p.guests_checked_in), 0) as guests_checked_in
-    FROM events e
-    LEFT JOIN participants p ON e.id = p.event_id AND p.status = 'active'
-    GROUP BY e.id
-    ORDER BY e.created_at DESC
-");
+// Scope to assigned events
+$assignedIds = Auth::getAssignedEventIds();
+$events = [];
+if (!empty($assignedIds)) {
+    $in = implode(',', array_fill(0, count($assignedIds), '?'));
+    $stmt = $db->getConnection()->prepare("
+        SELECT
+            e.*,
+            COUNT(DISTINCT p.id) as participant_count,
+            COALESCE(SUM(p.total_guests), 0) as total_guests,
+            COALESCE(SUM(p.guests_checked_in), 0) as guests_checked_in
+        FROM events e
+        LEFT JOIN participants p ON e.id = p.event_id AND p.status = 'active'
+        WHERE e.id IN ($in)
+        GROUP BY e.id
+        ORDER BY e.created_at DESC
+    ");
+    $stmt->execute($assignedIds);
+    $events = $stmt->fetchAll();
+}
 
 ob_start();
 ?>
