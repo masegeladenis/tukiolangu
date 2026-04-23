@@ -11,6 +11,7 @@ use App\Helpers\Auth;
 use App\Helpers\Session;
 use App\Helpers\Utils;
 use App\Database\Connection;
+use App\Services\ImageProcessor;
 use App\Services\QRCodeGenerator;
 
 Session::start();
@@ -55,6 +56,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$event) {
             $error = 'Selected event not found';
         } else {
+            // Reuse the latest uploaded card design for this event so manual entries
+            // generate full cards, not just standalone QR images.
+            $designBatch = $db->queryOne(" 
+                SELECT id, design_path, qr_position, qr_size
+                FROM batches
+                WHERE event_id = :event_id
+                  AND design_path IS NOT NULL
+                  AND design_path != ''
+                ORDER BY created_at DESC
+                LIMIT 1
+            ", ['event_id' => $eventId]);
+
             // Check if we need to create a batch for manual entries
             $batch = $db->queryOne("
                 SELECT * FROM batches 
@@ -64,11 +77,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$batch) {
                 // Create a batch for manual entries
                 $batchId = $db->insert("
-                    INSERT INTO batches (event_id, batch_name, design_path, excel_path, status, total_cards, processed)
-                    VALUES (:event_id, 'Manual Entries', '', '', 'completed', 0, 0)
-                ", ['event_id' => $eventId]);
+                    INSERT INTO batches (
+                        event_id, batch_name, design_path, excel_path,
+                        qr_position, qr_size, status, total_cards, processed, created_by
+                    )
+                    VALUES (
+                        :event_id, 'Manual Entries', :design_path, '',
+                        :qr_position, :qr_size, 'completed', 0, 0, :created_by
+                    )
+                ", [
+                    'event_id' => $eventId,
+                    'design_path' => $designBatch['design_path'] ?? '',
+                    'qr_position' => $designBatch['qr_position'] ?? 'bottom-right',
+                    'qr_size' => (int) ($designBatch['qr_size'] ?? 150),
+                    'created_by' => Auth::id()
+                ]);
             } else {
                 $batchId = $batch['id'];
+
+                // Keep the manual batch aligned with the latest event design if one exists.
+                if ($designBatch && empty($batch['design_path'])) {
+                    $db->execute(" 
+                        UPDATE batches
+                        SET design_path = :design_path,
+                            qr_position = :qr_position,
+                            qr_size = :qr_size
+                        WHERE id = :id
+                    ", [
+                        'design_path' => $designBatch['design_path'],
+                        'qr_position' => $designBatch['qr_position'] ?? 'bottom-right',
+                        'qr_size' => (int) ($designBatch['qr_size'] ?? 150),
+                        'id' => $batchId
+                    ]);
+
+                    $batch['design_path'] = $designBatch['design_path'];
+                    $batch['qr_position'] = $designBatch['qr_position'] ?? 'bottom-right';
+                    $batch['qr_size'] = (int) ($designBatch['qr_size'] ?? 150);
+                }
             }
             
             // Generate unique ID using event code
@@ -92,19 +137,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             try {
                 // Generate QR code
-                $qrGenerator = new QRCodeGenerator();
+                $qrSize = (int) ($batch['qr_size'] ?? $designBatch['qr_size'] ?? 150);
+                $qrGenerator = new QRCodeGenerator($qrSize);
                 $qrPath = $qrGenerator->generate($qrDataArray, $uniqueId);
+                $cardPath = null;
+
+                $designPath = $batch['design_path'] ?? ($designBatch['design_path'] ?? '');
+                if (!empty($designPath) && file_exists($designPath)) {
+                    $imageProcessor = new ImageProcessor();
+                    $imageProcessor
+                        ->setQRPosition($batch['qr_position'] ?? $designBatch['qr_position'] ?? 'bottom-right')
+                        ->setQRSize($qrSize);
+
+                    $cardPath = $imageProcessor->overlayQRCode(
+                        $designPath,
+                        $qrPath,
+                        $uniqueId,
+                        [
+                            'ticket_type' => $ticketType,
+                            'name' => $name,
+                            'guests' => $totalGuests,
+                        ]
+                    );
+                }
                 
                 // Insert participant
                 $participantId = $db->insert("
                     INSERT INTO participants (
                         batch_id, event_id, name, email, phone, organization,
                         unique_id, ticket_type, total_guests, guests_remaining,
-                        qr_data, qr_code_path, notes, status
+                        qr_data, qr_code_path, card_output_path, notes, status
                     ) VALUES (
                         :batch_id, :event_id, :name, :email, :phone, :organization,
                         :unique_id, :ticket_type, :total_guests, :guests_remaining,
-                        :qr_data, :qr_code_path, :notes, 'active'
+                        :qr_data, :qr_code_path, :card_output_path, :notes, 'active'
                     )
                 ", [
                     'batch_id' => $batchId,
@@ -119,6 +185,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'guests_remaining' => $totalGuests,
                     'qr_data' => $qrDataJson,
                     'qr_code_path' => $qrPath,
+                    'card_output_path' => $cardPath,
                     'notes' => $notes ?: null
                 ]);
                 
@@ -128,7 +195,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     WHERE id = :batch_id
                 ", ['batch_id' => $batchId]);
                 
-                $success = "Participant added successfully! Unique ID: {$uniqueId}";
+                $success = $cardPath
+                    ? "Participant added successfully and card generated. Unique ID: {$uniqueId}"
+                    : "Participant added successfully. QR generated, but no card design exists yet for this event. Unique ID: {$uniqueId}";
                 
                 // Clear form
                 $preselectedEventId = $eventId;
