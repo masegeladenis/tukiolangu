@@ -77,24 +77,29 @@ class SmsService
     }
     
     /**
-     * Format phone number to international format
+     * Format phone number to international format (no + prefix, for API use)
      */
     private function formatPhoneNumber(string $phone): string
     {
-        // Remove any spaces, dashes, or special characters
-        $phone = preg_replace('/[^0-9]/', '', $phone);
-        
-        // If starts with 0, assume Tanzania and replace with 255
-        if (str_starts_with($phone, '0')) {
-            $phone = '255' . substr($phone, 1);
+        // Strip everything except digits
+        $digits = preg_replace('/[^0-9]/', '', $phone);
+
+        // Already has full country code: 255XXXXXXXXX (12 digits)
+        if (str_starts_with($digits, '255') && strlen($digits) === 12) {
+            return $digits;
         }
-        
-        // If doesn't start with country code, assume Tanzania
-        if (!str_starts_with($phone, '255') && strlen($phone) === 9) {
-            $phone = '255' . $phone;
+
+        // Leading 0: 0XXXXXXXXX (10 digits)
+        if (str_starts_with($digits, '0') && strlen($digits) === 10) {
+            return '255' . substr($digits, 1);
         }
-        
-        return $phone;
+
+        // Bare 9-digit number
+        if (strlen($digits) === 9) {
+            return '255' . $digits;
+        }
+
+        return $digits;
     }
     
     /**

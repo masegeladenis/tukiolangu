@@ -230,19 +230,25 @@ class Utils
             return '';
         }
 
-        // Remove any spaces, dashes, plus signs, or special characters
-        $phone = preg_replace('/[^0-9]/', '', $phone);
-        
-        // If starts with 0, assume Tanzania and replace with 255
-        if (str_starts_with($phone, '0')) {
-            $phone = '255' . substr($phone, 1);
+        // Strip everything except digits (removes spaces, dashes, plus signs, etc.)
+        $digits = preg_replace('/[^0-9]/', '', $phone);
+
+        // Already has full country code: 255XXXXXXXXX (12 digits)
+        if (str_starts_with($digits, '255') && strlen($digits) === 12) {
+            return '+' . $digits;
         }
-        
-        // If doesn't start with country code and is 9 digits, assume Tanzania
-        if (!str_starts_with($phone, '255') && strlen($phone) === 9) {
-            $phone = '255' . $phone;
+
+        // Leading 0: 0XXXXXXXXX (10 digits) → strip leading 0
+        if (str_starts_with($digits, '0') && strlen($digits) === 10) {
+            return '+255' . substr($digits, 1);
         }
-        
-        return $phone;
+
+        // Bare 9-digit number (no country code, no leading 0): XXXXXXXXX
+        if (strlen($digits) === 9) {
+            return '+255' . $digits;
+        }
+
+        // Anything else: prepend +255 and return as-is (best-effort)
+        return '+255' . $digits;
     }
 }
