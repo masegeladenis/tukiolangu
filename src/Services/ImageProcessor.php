@@ -66,6 +66,25 @@ class ImageProcessor
         $qrWidth  = imagesx($qr);
         $qrHeight = imagesy($qr);
 
+        // Resize QR to the configured size (QR is always square).
+        // Without this, qrSize is stored but never applied to the actual image pixels,
+        // so only the white background grew while the QR stayed the same size.
+        if ($qrWidth !== $this->qrSize) {
+            $resized = imagecreatetruecolor($this->qrSize, $this->qrSize);
+            imagealphablending($resized, false);
+            imagesavealpha($resized, true);
+            imagecopyresampled(
+                $resized, $qr,
+                0, 0, 0, 0,
+                $this->qrSize, $this->qrSize,
+                $qrWidth, $qrHeight
+            );
+            imagedestroy($qr);
+            $qr      = $resized;
+            $qrWidth  = $this->qrSize;
+            $qrHeight = $this->qrSize;
+        }
+
         // Build label lines to draw below the QR code
         // GD built-in font metrics: font5 = 9×15px, font3 = 7×13px
         $labelLines = [];
