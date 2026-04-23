@@ -42,16 +42,6 @@ $basePath = Utils::basePath();
                     <span>Dashboard</span>
                 </a>
                 
-                <a href="<?= $basePath ?>/events/index.php" class="nav-item <?= strpos($_SERVER['REQUEST_URI'], '/events/') !== false ? 'active' : '' ?>">
-                    <i class="fas fa-calendar-alt"></i>
-                    <span>Events</span>
-                </a>
-                
-                <a href="<?= $basePath ?>/batches/upload.php" class="nav-item <?= strpos($_SERVER['REQUEST_URI'], '/batches/') !== false ? 'active' : '' ?>">
-                    <i class="fas fa-upload"></i>
-                    <span>Upload Cards</span>
-                </a>
-                
                     <?php if (Auth::hasPermission('events_view')): ?>
                     <a href="<?= $basePath ?>/events/index.php" class="nav-item <?= strpos($_SERVER['REQUEST_URI'], '/events/') !== false ? 'active' : '' ?>">
                         <i class="fas fa-calendar-alt"></i>
