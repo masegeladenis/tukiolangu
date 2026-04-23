@@ -14,10 +14,10 @@ header('Content-Type: application/json');
 
 Session::start();
 
-// Check authentication
-if (!Auth::check()) {
-    http_response_code(401);
-    echo json_encode(['success' => false, 'message' => 'Not authenticated']);
+// Check authentication — only admins can delete participants
+if (!Auth::check() || !Auth::isAdmin()) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => 'Forbidden']);
     exit;
 }
 

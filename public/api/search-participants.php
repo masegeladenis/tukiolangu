@@ -25,7 +25,15 @@ if (!Auth::check()) {
 
 $db = Connection::getInstance();
 
+// Restrict results to events the current user is allowed to access
+$assignedIds = Auth::getAssignedEventIds();
+
 $eventId = (int) ($_GET['event_id'] ?? 0);
+// If requesting a specific event, verify access
+if ($eventId > 0 && !Auth::canAccessEvent($eventId)) {
+    echo json_encode(['success' => true, 'participants' => [], 'total' => 0]);
+    exit;
+}
 $search = trim($_GET['search'] ?? '');
 $status = $_GET['status'] ?? '';
 $perPage = (int) ($_GET['per_page'] ?? 100);
@@ -43,6 +51,13 @@ $params = [];
 if ($eventId > 0) {
     $where[] = "p.event_id = :event_id";
     $params['event_id'] = $eventId;
+} elseif (!empty($assignedIds)) {
+    $idPlaceholders = implode(',', array_fill(0, count($assignedIds), '?'));
+    $where[] = "p.event_id IN ($idPlaceholders)";
+} else {
+    // No assigned events — return empty
+    echo json_encode(['success' => true, 'participants' => [], 'total' => 0]);
+    exit;
 }
 
 if (!empty($search)) {
@@ -64,8 +79,17 @@ if ($status === 'checked') {
 
 $whereClause = !empty($where) ? 'WHERE ' . implode(' AND ', $where) : '';
 
+// Build final param list (named params first, then positional IN ids)
+$buildParams = function() use ($eventId, $params, $assignedIds) {
+    if ($eventId > 0 || empty($assignedIds)) {
+        return array_values($params);
+    }
+    return array_merge(array_values($params), $assignedIds);
+};
+
 try {
-    $participants = $db->query("
+    $pdo = $db->getConnection();
+    $stmt = $pdo->prepare("
         SELECT p.*, e.event_name,
                (SELECT COUNT(*) FROM whatsapp_logs wl WHERE wl.participant_id = p.id) as whatsapp_sent
         FROM participants p
@@ -73,7 +97,9 @@ try {
         {$whereClause}
         ORDER BY p.created_at DESC
         LIMIT {$perPage}
-    ", $params);
+    ");
+    $stmt->execute($buildParams());
+    $participants = $stmt->fetchAll();
 
     // Format the response
     $formattedParticipants = array_map(function($p) {

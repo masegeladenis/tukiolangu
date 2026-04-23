@@ -9,12 +9,20 @@ use App\Helpers\Utils;
 use App\Database\Connection;
 
 Session::start();
-Auth::requireAdmin();
+Auth::require();
 
 $db = Connection::getInstance();
 $pageTitle = 'Participants';
+$isAdmin = Auth::isAdmin();
+
+// Scope all queries to events the current user can access
+$assignedIds = Auth::getAssignedEventIds();
 
 $eventId = (int) ($_GET['event_id'] ?? 0);
+// If a scanner requests a specific event they can't access, ignore it
+if ($eventId > 0 && !Auth::canAccessEvent($eventId)) {
+    $eventId = 0;
+}
 $search = $_GET['search'] ?? '';
 $status = $_GET['status'] ?? '';
 $perPage = (int) ($_GET['per_page'] ?? 100);
@@ -33,9 +41,18 @@ $offset = ($page - 1) * $perPage;
 $where = [];
 $params = [];
 
-if ($eventId > 0) {
-    $where[] = "p.event_id = :event_id";
-    $params['event_id'] = $eventId;
+// Always restrict to assigned events
+if (!empty($assignedIds)) {
+    if ($eventId > 0) {
+        $where[] = "p.event_id = :event_id";
+        $params['event_id'] = $eventId;
+    } else {
+        $idPlaceholders = implode(',', array_fill(0, count($assignedIds), '?'));
+        $where[] = "p.event_id IN ($idPlaceholders)";
+        // Note: assigned IDs are merged into params below at query time
+    }
+} else {
+    $where[] = "1 = 0"; // no access
 }
 
 if (!empty($search)) {
@@ -55,18 +72,30 @@ if ($status === 'checked') {
 
 $whereClause = !empty($where) ? 'WHERE ' . implode(' AND ', $where) : '';
 
-// Get total count
-$totalCount = $db->queryOne("
+// Build positional params for IN clause when no specific event selected
+$buildParams = function() use ($eventId, $params, $assignedIds) {
+    if ($eventId > 0 || empty($assignedIds)) {
+        return array_values($params);
+    }
+    // Merge search/status named params (as values) with the positional IN ids
+    return array_merge(array_values($params), $assignedIds);
+};
+
+$pdo = $db->getConnection();
+
+$countStmt = $pdo->prepare("
     SELECT COUNT(*) as total
     FROM participants p
     JOIN events e ON p.event_id = e.id
     {$whereClause}
-", $params)['total'] ?? 0;
+");
+$countStmt->execute($buildParams());
+$totalCount = (int) ($countStmt->fetch()['total'] ?? 0);
 
 $totalPages = ceil($totalCount / $perPage);
 if ($page > $totalPages && $totalPages > 0) $page = $totalPages;
 
-$participants = $db->query("
+$listStmt = $pdo->prepare("
     SELECT p.*, e.event_name,
            (SELECT COUNT(*) FROM whatsapp_logs wl WHERE wl.participant_id = p.id) as whatsapp_sent
     FROM participants p
@@ -74,10 +103,16 @@ $participants = $db->query("
     {$whereClause}
     ORDER BY p.created_at DESC
     LIMIT {$perPage} OFFSET {$offset}
-", $params);
+");
+$listStmt->execute($buildParams());
+$participants = $listStmt->fetchAll();
 
-// Get events for filter
-$events = $db->query("SELECT id, event_name FROM events ORDER BY created_at DESC");
+// Get events for filter — scoped to assigned events
+$eventsForFilter = !empty($assignedIds)
+    ? $db->getConnection()->query(
+        "SELECT id, event_name FROM events WHERE id IN (" . implode(',', $assignedIds) . ") ORDER BY created_at DESC"
+      )->fetchAll()
+    : [];
 
 $basePath = Utils::basePath();
 ob_start();
@@ -86,16 +121,18 @@ ob_start();
 <div class="card">
     <div class="card-header">
         <h3>All Participants</h3>
+        <?php if ($isAdmin): ?>
         <a href="add.php<?= $eventId > 0 ? '?event_id=' . $eventId : '' ?>" class="btn btn-primary">
             <i class="fas fa-plus"></i> Add Participant
         </a>
+        <?php endif; ?>
     </div>
     <div class="card-body">
         <!-- Filters -->
         <form method="GET" class="filter-form" id="filterForm">
             <select name="event_id" id="eventFilter" class="form-control">
                 <option value="">All Events</option>
-                <?php foreach ($events as $event): ?>
+                <?php foreach ($eventsForFilter as $event): ?>
                 <option value="<?= $event['id'] ?>" <?= $eventId == $event['id'] ? 'selected' : '' ?>>
                     <?= Utils::escape($event['event_name']) ?>
                 </option>
@@ -245,12 +282,14 @@ ob_start();
                                 <i class="fas fa-undo"></i>
                             </button>
                             <?php endif; ?>
+                            <?php if ($isAdmin): ?>
                             <a href="edit.php?id=<?= $p['id'] ?>" class="btn btn-sm btn-outline" title="Edit Participant">
                                 <i class="fas fa-edit"></i>
                             </a>
                             <button type="button" class="btn btn-sm btn-outline" style="color: #dc2626; border-color: #dc2626;" title="Delete Participant" onclick="confirmDelete(<?= $p['id'] ?>, '<?= Utils::escape(addslashes($p['name'])) ?>')">
                                 <i class="fas fa-trash"></i>
                             </button>
+                            <?php endif; ?>
                         </td>
                     </tr>
                     <?php endforeach; ?>

@@ -18,8 +18,13 @@ Auth::requireAdmin();
 
 $db = Connection::getInstance();
 
-// Get events for dropdown
-$events = $db->query("SELECT id, event_name, event_code FROM events WHERE status != 'cancelled' ORDER BY created_at DESC");
+// Get events for dropdown — scoped to assigned events
+$assignedIds = Auth::getAssignedEventIds();
+$events = !empty($assignedIds)
+    ? $db->getConnection()->query(
+        "SELECT id, event_name, event_code FROM events WHERE status != 'cancelled' AND id IN (" . implode(',', $assignedIds) . ") ORDER BY created_at DESC"
+      )->fetchAll()
+    : [];
 
 $preselectedEventId = (int) ($_GET['event_id'] ?? 0);
 $error = '';

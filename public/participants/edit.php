@@ -36,6 +36,12 @@ if (!$participant) {
     Utils::redirect('/tukioqrcode/public/participants/index.php');
 }
 
+// Ensure current user can access this participant's event
+if (!Auth::canAccessEvent((int) $participant['event_id'])) {
+    Session::flash('error', 'Access denied.');
+    Utils::redirect('/tukioqrcode/public/participants/index.php');
+}
+
 // Get SMS history
 $smsLogs = $db->query("
     SELECT sl.*, u.full_name as sent_by_name

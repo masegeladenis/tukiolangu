@@ -52,12 +52,12 @@ $basePath = Utils::basePath();
                     <i class="fas fa-upload"></i>
                     <span>Upload Cards</span>
                 </a>
+                <?php endif; ?>
                 
                 <a href="<?= $basePath ?>/participants/index.php" class="nav-item <?= strpos($_SERVER['REQUEST_URI'], '/participants/') !== false ? 'active' : '' ?>">
                     <i class="fas fa-users"></i>
                     <span>Participants</span>
                 </a>
-                <?php endif; ?>
                 
                 <a href="<?= $basePath ?>/scanner/index.php" class="nav-item <?= strpos($_SERVER['REQUEST_URI'], '/scanner/') !== false ? 'active' : '' ?>">
                     <i class="fas fa-camera"></i>
