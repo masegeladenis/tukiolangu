@@ -61,12 +61,13 @@ if ($eventId > 0) {
 }
 
 if (!empty($search)) {
-    $where[] = "(p.name LIKE :search OR p.unique_id LIKE :search2 OR p.email LIKE :search3 OR p.phone LIKE :search4 OR p.organization LIKE :search5)";
+    $where[] = "(CAST(p.id AS CHAR) LIKE :search OR p.name LIKE :search2 OR p.unique_id LIKE :search3 OR p.email LIKE :search4 OR p.phone LIKE :search5 OR p.organization LIKE :search6)";
     $params['search'] = "%{$search}%";
     $params['search2'] = "%{$search}%";
     $params['search3'] = "%{$search}%";
     $params['search4'] = "%{$search}%";
     $params['search5'] = "%{$search}%";
+    $params['search6'] = "%{$search}%";
 }
 
 if ($status === 'checked') {
