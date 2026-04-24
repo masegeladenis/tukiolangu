@@ -47,19 +47,25 @@ if (!empty($assignedIds)) {
         $where[] = "p.event_id = :event_id";
         $params['event_id'] = $eventId;
     } else {
-        $idPlaceholders = implode(',', array_fill(0, count($assignedIds), '?'));
+        $eventParams = [];
+        foreach ($assignedIds as $index => $assignedId) {
+            $paramName = 'assigned_event_' . $index;
+            $eventParams[] = ':' . $paramName;
+            $params[$paramName] = $assignedId;
+        }
+        $idPlaceholders = implode(',', $eventParams);
         $where[] = "p.event_id IN ($idPlaceholders)";
-        // Note: assigned IDs are merged into params below at query time
     }
 } else {
     $where[] = "1 = 0"; // no access
 }
 
 if (!empty($search)) {
-    $where[] = "(p.name LIKE :search OR p.unique_id LIKE :search2 OR p.email LIKE :search3)";
+    $where[] = "(CAST(p.id AS CHAR) LIKE :search OR p.name LIKE :search2 OR p.unique_id LIKE :search3 OR p.email LIKE :search4)";
     $params['search'] = "%{$search}%";
     $params['search2'] = "%{$search}%";
     $params['search3'] = "%{$search}%";
+    $params['search4'] = "%{$search}%";
 }
 
 if ($status === 'checked') {
@@ -72,15 +78,6 @@ if ($status === 'checked') {
 
 $whereClause = !empty($where) ? 'WHERE ' . implode(' AND ', $where) : '';
 
-// Build positional params for IN clause when no specific event selected
-$buildParams = function() use ($eventId, $params, $assignedIds) {
-    if ($eventId > 0 || empty($assignedIds)) {
-        return array_values($params);
-    }
-    // Merge search/status named params (as values) with the positional IN ids
-    return array_merge(array_values($params), $assignedIds);
-};
-
 $pdo = $db->getConnection();
 
 $countStmt = $pdo->prepare("
@@ -89,7 +86,7 @@ $countStmt = $pdo->prepare("
     JOIN events e ON p.event_id = e.id
     {$whereClause}
 ");
-$countStmt->execute($buildParams());
+$countStmt->execute($params);
 $totalCount = (int) ($countStmt->fetch()['total'] ?? 0);
 
 $totalPages = ceil($totalCount / $perPage);
@@ -104,7 +101,7 @@ $listStmt = $pdo->prepare("
     ORDER BY p.created_at DESC
     LIMIT {$perPage} OFFSET {$offset}
 ");
-$listStmt->execute($buildParams());
+$listStmt->execute($params);
 $participants = $listStmt->fetchAll();
 
 // Get events for filter — scoped to assigned events

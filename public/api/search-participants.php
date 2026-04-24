@@ -52,7 +52,13 @@ if ($eventId > 0) {
     $where[] = "p.event_id = :event_id";
     $params['event_id'] = $eventId;
 } elseif (!empty($assignedIds)) {
-    $idPlaceholders = implode(',', array_fill(0, count($assignedIds), '?'));
+    $eventParams = [];
+    foreach ($assignedIds as $index => $assignedId) {
+        $paramName = 'assigned_event_' . $index;
+        $eventParams[] = ':' . $paramName;
+        $params[$paramName] = $assignedId;
+    }
+    $idPlaceholders = implode(',', $eventParams);
     $where[] = "p.event_id IN ($idPlaceholders)";
 } else {
     // No assigned events — return empty
@@ -80,14 +86,6 @@ if ($status === 'checked') {
 
 $whereClause = !empty($where) ? 'WHERE ' . implode(' AND ', $where) : '';
 
-// Build final param list (named params first, then positional IN ids)
-$buildParams = function() use ($eventId, $params, $assignedIds) {
-    if ($eventId > 0 || empty($assignedIds)) {
-        return array_values($params);
-    }
-    return array_merge(array_values($params), $assignedIds);
-};
-
 try {
     $pdo = $db->getConnection();
     $stmt = $pdo->prepare("
@@ -99,7 +97,7 @@ try {
         ORDER BY p.created_at DESC
         LIMIT {$perPage}
     ");
-    $stmt->execute($buildParams());
+    $stmt->execute($params);
     $participants = $stmt->fetchAll();
 
     // Format the response
