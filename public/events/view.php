@@ -229,9 +229,56 @@ ob_start();
                     <span>Include already sent (resend to all)</span>
                 </label>
                 
-                <button type="button" id="sendAllSms" class="btn" style="width: 100%; background: #22c55e; color: white;" onclick="sendSmsInvitations(true)">
-                    <i class="fas fa-sms"></i> Send SMS to All
-                </button>
+                <!-- Participant Selection -->
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 13px; color: #166534; font-weight: 500; display: block; margin-bottom: 6px;">
+                        <i class="fas fa-users"></i> Select Recipients:
+                    </label>
+                    <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                        <button type="button" class="btn" style="flex: 1; background: #22c55e; color: white; font-size: 12px; padding: 6px 10px;" onclick="smsSelectAll()">
+                            <i class="fas fa-check-double"></i> Select All
+                        </button>
+                        <button type="button" class="btn" style="flex: 1; background: #e5e7eb; color: #374151; font-size: 12px; padding: 6px 10px;" onclick="smsDeselectAll()">
+                            <i class="fas fa-times"></i> Deselect All
+                        </button>
+                        <button type="button" class="btn" style="flex: 1; background: #fef3c7; color: #92400e; font-size: 12px; padding: 6px 10px;" onclick="smsSelectUnsent()">
+                            <i class="fas fa-clock"></i> Unsent Only
+                        </button>
+                    </div>
+                    <div style="position: relative; margin-bottom: 8px;">
+                        <input type="text" id="smsParticipantSearch" placeholder="Search participants..." style="width: 100%; padding: 8px 12px 8px 32px; border: 1px solid #bbf7d0; border-radius: 8px; font-size: 13px;">
+                        <i class="fas fa-search" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 13px;"></i>
+                    </div>
+                    <div id="smsParticipantList" style="max-height: 200px; overflow-y: auto; border: 1px solid #bbf7d0; border-radius: 8px; background: white;">
+                        <?php foreach ($smsParticipants as $sp): ?>
+                        <label style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid #f0fdf4; cursor: pointer; font-size: 13px;" class="sms-participant-item" data-name="<?= strtolower(Utils::escape($sp['name'])) ?>" data-sent="<?= $sp['sms_sent'] > 0 ? '1' : '0' ?>">
+                            <input type="checkbox" class="sms-participant-cb" value="<?= $sp['id'] ?>" checked style="accent-color: #22c55e;">
+                            <span style="flex: 1; color: #14532d;"><?= Utils::escape($sp['name']) ?></span>
+                            <span style="font-size: 11px; color: #6b7280;"><?= Utils::escape($sp['phone']) ?></span>
+                            <?php if ($sp['sms_sent'] > 0): ?>
+                            <span style="background: #bbf7d0; color: #166534; padding: 2px 6px; border-radius: 4px; font-size: 10px;"><i class="fas fa-check"></i> Sent</span>
+                            <?php else: ?>
+                            <span style="background: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 4px; font-size: 10px;"><i class="fas fa-clock"></i> Pending</span>
+                            <?php endif; ?>
+                        </label>
+                        <?php endforeach; ?>
+                        <?php if (empty($smsParticipants)): ?>
+                        <p style="padding: 16px; text-align: center; color: #6b7280; margin: 0;">No participants with phone numbers.</p>
+                        <?php endif; ?>
+                    </div>
+                    <small style="color: #6b7280; font-size: 11px; margin-top: 4px; display: block;">
+                        <i class="fas fa-info-circle"></i> <span id="smsSelectedCount"><?= count($smsParticipants) ?></span> of <?= count($smsParticipants) ?> selected
+                    </small>
+                </div>
+                
+                <div style="display: flex; gap: 8px;">
+                    <button type="button" id="sendSelectedSms" class="btn" style="flex: 1; background: #22c55e; color: white;" onclick="sendSmsInvitations(false)">
+                        <i class="fas fa-sms"></i> Send to Selected
+                    </button>
+                    <button type="button" id="sendAllSms" class="btn" style="flex: 1; background: #166534; color: white;" onclick="sendSmsInvitations(true)">
+                        <i class="fas fa-sms"></i> Send to All
+                    </button>
+                </div>
                 <div id="smsStatus" style="margin-top: 12px; font-size: 13px; color: #14532d;"></div>
             </div>
             
@@ -538,7 +585,60 @@ document.addEventListener('DOMContentLoaded', function() {
     if (smsTemplateEl) {
         smsTemplateEl.value = <?= json_encode($smsTemplate, JSON_UNESCAPED_UNICODE) ?>;
     }
+    
+    // SMS participant search filter
+    const searchInput = document.getElementById('smsParticipantSearch');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            const query = this.value.toLowerCase();
+            document.querySelectorAll('.sms-participant-item').forEach(function(item) {
+                const name = item.getAttribute('data-name');
+                item.style.display = name.includes(query) ? '' : 'none';
+            });
+        });
+    }
+    
+    // Update selected count when checkboxes change
+    document.querySelectorAll('.sms-participant-cb').forEach(function(cb) {
+        cb.addEventListener('change', updateSmsSelectedCount);
+    });
 });
+
+function updateSmsSelectedCount() {
+    const checked = document.querySelectorAll('.sms-participant-cb:checked').length;
+    const el = document.getElementById('smsSelectedCount');
+    if (el) el.textContent = checked;
+}
+
+function smsSelectAll() {
+    document.querySelectorAll('.sms-participant-item').forEach(function(item) {
+        if (item.style.display !== 'none') {
+            item.querySelector('.sms-participant-cb').checked = true;
+        }
+    });
+    updateSmsSelectedCount();
+}
+
+function smsDeselectAll() {
+    document.querySelectorAll('.sms-participant-cb').forEach(function(cb) {
+        cb.checked = false;
+    });
+    updateSmsSelectedCount();
+}
+
+function smsSelectUnsent() {
+    document.querySelectorAll('.sms-participant-item').forEach(function(item) {
+        const cb = item.querySelector('.sms-participant-cb');
+        cb.checked = item.getAttribute('data-sent') === '0';
+    });
+    updateSmsSelectedCount();
+}
+
+function getSelectedParticipantIds() {
+    return Array.from(document.querySelectorAll('.sms-participant-cb:checked')).map(function(cb) {
+        return parseInt(cb.value);
+    });
+}
 
 function showModal(type, sendAll) {
     pendingAction = type;
@@ -561,10 +661,17 @@ function showModal(type, sendAll) {
         confirmBtn.innerHTML = '<i class="fas fa-envelope"></i> Send Emails';
         confirmBtn.style.background = '';
     } else if (type === 'sms') {
+        const selectedCount = sendAll ? <?= count($smsParticipants) ?> : getSelectedParticipantIds().length;
+        if (!sendAll && selectedCount === 0) {
+            document.getElementById('smsStatus').innerHTML = '<i class="fas fa-exclamation-circle" style="color: #dc2626;"></i> Please select at least one participant.';
+            return;
+        }
         icon.className = 'modal-icon success';
         iconInner.className = 'fas fa-sms';
         title.textContent = 'Send SMS Invitations';
-        message.textContent = 'This will send SMS invitations to all participants with valid phone numbers.';
+        message.textContent = sendAll 
+            ? 'This will send SMS invitations to all participants with valid phone numbers.'
+            : 'This will send SMS invitations to ' + selectedCount + ' selected participant(s).';
         noteText.textContent = 'Participants without phone numbers will be skipped.';
         confirmBtn.innerHTML = '<i class="fas fa-sms"></i> Send SMS';
         confirmBtn.style.background = '#22c55e';
@@ -674,13 +781,24 @@ async function executeEmailSend() {
 }
 
 async function executeSmsSend() {
-    const btn = document.getElementById('sendAllSms');
+    const btn = pendingSendAll ? document.getElementById('sendAllSms') : document.getElementById('sendSelectedSms');
     const status = document.getElementById('smsStatus');
     const progressDiv = document.getElementById('invitationProgress');
     const progressBar = document.getElementById('progressBar');
     const progressText = document.getElementById('progressText');
     const forceResend = document.getElementById('smsForceResend')?.checked || false;
     const customMessage = document.getElementById('smsMessageTemplate')?.value || '';
+    
+    const payload = {
+        event_id: eventId,
+        send_to_all: pendingSendAll,
+        force_resend: forceResend,
+        custom_message: customMessage.trim() || null
+    };
+    
+    if (!pendingSendAll) {
+        payload.participant_ids = getSelectedParticipantIds();
+    }
     
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
@@ -694,12 +812,7 @@ async function executeSmsSend() {
         const response = await fetch(basePath + '/api/send-sms-invitations.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                event_id: eventId, 
-                send_to_all: pendingSendAll,
-                force_resend: forceResend,
-                custom_message: customMessage.trim() || null
-            })
+            body: JSON.stringify(payload)
         });
         
         const result = await response.json();
@@ -739,7 +852,9 @@ async function executeSmsSend() {
     }
     
     btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-sms"></i> Send SMS to All';
+    btn.innerHTML = pendingSendAll 
+        ? '<i class="fas fa-sms"></i> Send to All' 
+        : '<i class="fas fa-sms"></i> Send to Selected';
 }
 
 // Template definitions
