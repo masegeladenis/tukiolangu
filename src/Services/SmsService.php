@@ -200,6 +200,94 @@ class SmsService
     }
     
     /**
+     * Send invitation SMS using a custom message template with placeholders
+     */
+    public function sendCustomInvitation(array $participant, string $messageTemplate): array
+    {
+        $phone = $participant['phone'] ?? '';
+        
+        if (empty($phone)) {
+            return [
+                'success' => false,
+                'message' => 'No phone number available'
+            ];
+        }
+        
+        $message = $this->fillMessagePlaceholders($messageTemplate, $participant);
+        
+        return $this->send($phone, $message);
+    }
+    
+    /**
+     * Get the invitation message template with placeholders for participant data.
+     * Event data is filled in; participant fields use {placeholder} syntax.
+     */
+    public function getInvitationTemplate(array $event): string
+    {
+        $eventName = $event['event_name'] ?? 'Event';
+        $eventVenue = $event['event_venue'] ?? '';
+        
+        $eventDate = !empty($event['event_date']) 
+            ? date('d/m/Y', strtotime($event['event_date'])) 
+            : 'TBA';
+        
+        $eventTime = '';
+        $timePeriod = '';
+        if (!empty($event['event_time'])) {
+            $hour = (int) date('G', strtotime($event['event_time']));
+            $eventTime = date('g:i A', strtotime($event['event_time']));
+            
+            if ($hour >= 5 && $hour < 12) {
+                $timePeriod = 'Asubuhi';
+            } elseif ($hour >= 12 && $hour < 16) {
+                $timePeriod = 'Mchana';
+            } elseif ($hour >= 16 && $hour < 19) {
+                $timePeriod = 'Jioni';
+            } else {
+                $timePeriod = 'Usiku';
+            }
+        }
+        
+        $message = "Mpendwa {name},\n";
+        $message .= "Unakaribishwa Kuhudhuria {$eventName}\n\n";
+        
+        $message .= "Taarifa za Tukio:\n";
+        $message .= "Tarehe: {$eventDate}\n";
+        if ($eventTime) {
+            $message .= "Muda: {$eventTime} {$timePeriod}\n";
+        }
+        if ($eventVenue) {
+            $message .= "Mahali: {$eventVenue}\n";
+        }
+        
+        $message .= "\nTiketi Yako:\n";
+        $message .= "Aina: {ticket_type}\n";
+        $message .= "Utambulisho: {unique_id}\n";
+        $message .= "Idadi: {total_guests}\n\n";
+        
+        $message .= "Onyesha kadi yako au ujumbe huu kwenye lango la kuingia kwa ajili ya kuingia.\n";
+        $message .= "Karibu sana!\n\n";
+        $message .= "\u00a9Tukio Langu App";
+        
+        return $message;
+    }
+    
+    /**
+     * Fill in participant placeholders in a message template
+     */
+    public function fillMessagePlaceholders(string $template, array $participant): string
+    {
+        $replacements = [
+            '{name}' => $participant['name'] ?? 'Guest',
+            '{ticket_type}' => $participant['ticket_type'] ?? 'Standard',
+            '{unique_id}' => $participant['unique_id'] ?? '',
+            '{total_guests}' => (string) ($participant['total_guests'] ?? 1),
+        ];
+        
+        return str_replace(array_keys($replacements), array_values($replacements), $template);
+    }
+    
+    /**
      * Send invitation SMS to multiple participants
      */
     public function sendBulkInvitations(array $participants, array $event): array

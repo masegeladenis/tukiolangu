@@ -607,6 +607,22 @@ ob_start();
         
         <!-- SMS Actions -->
         <?php if (!empty($participant['phone'])): ?>
+        <?php
+        // Generate default SMS template for this participant
+        $smsServiceForEdit = new \App\Services\SmsService();
+        $participantEvent = $db->queryOne("SELECT * FROM events WHERE id = :id", ['id' => $participant['event_id']]);
+        $smsDefaultTemplate = $smsServiceForEdit->getInvitationTemplate($participantEvent);
+        $smsPrefilledMessage = $smsServiceForEdit->fillMessagePlaceholders($smsDefaultTemplate, $participant);
+        ?>
+        <div style="margin-bottom: 16px;">
+            <label style="font-size: 13px; color: #166534; font-weight: 500; display: block; margin-bottom: 6px;">
+                <i class="fas fa-edit"></i> SMS Message:
+            </label>
+            <textarea id="smsCustomMessage" style="width: 100%; padding: 10px 12px; border: 1px solid #bbf7d0; border-radius: 8px; font-size: 13px; min-height: 180px; resize: vertical; background: white; color: #14532d; font-family: inherit;"><?= Utils::escape($smsPrefilledMessage) ?></textarea>
+            <small style="color: #6b7280; font-size: 11px;">
+                <i class="fas fa-info-circle"></i> Edit the message above before sending. Changes only affect this send.
+            </small>
+        </div>
         <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
             <?php if (!$lastInvitationSms): ?>
                 <button type="button" class="btn btn-success" onclick="sendSms(false)">
@@ -973,12 +989,15 @@ async function sendSms(forceResend = false) {
     status.innerHTML = '';
     
     try {
+        const customMessage = document.getElementById('smsCustomMessage')?.value || '';
         const response = await fetch(basePath + '/api/send-sms.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 participant_id: <?= $participantId ?>,
-                force_resend: forceResend
+                force_resend: forceResend,
+                message_type: customMessage.trim() ? 'custom' : 'invitation',
+                custom_message: customMessage.trim() || null
             })
         });
         

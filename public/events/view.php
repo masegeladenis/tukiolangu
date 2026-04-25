@@ -87,6 +87,17 @@ $participants = $db->query("
     LIMIT 10
 ", ['event_id' => $eventId]);
 
+// Get all participants with phone numbers (for SMS participant picker)
+$smsParticipants = $db->query("
+    SELECT p.id, p.name, p.phone, p.ticket_type, p.unique_id,
+        (SELECT COUNT(*) FROM sms_logs sl WHERE sl.participant_id = p.id AND sl.message_type = 'invitation' AND sl.status = 'sent') as sms_sent
+    FROM participants p
+    WHERE p.event_id = :event_id
+    AND p.phone IS NOT NULL AND p.phone != ''
+    AND p.status = 'active'
+    ORDER BY p.name ASC
+", ['event_id' => $eventId]);
+
 $pageTitle = $event['event_name'];
 
 $basePath = Utils::basePath();
@@ -200,6 +211,17 @@ ob_start();
                 <p style="font-size: 13px; color: #14532d; margin-bottom: 12px;">
                     Send SMS invitations with event details and ticket info directly to their phones.
                 </p>
+                
+                <!-- SMS Message Preview/Edit -->
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 13px; color: #166534; font-weight: 500; display: block; margin-bottom: 6px;">
+                        <i class="fas fa-edit"></i> Message Template:
+                    </label>
+                    <textarea id="smsMessageTemplate" style="width: 100%; padding: 10px 12px; border: 1px solid #bbf7d0; border-radius: 8px; font-size: 13px; min-height: 180px; resize: vertical; background: white; color: #14532d; font-family: inherit;" placeholder="Loading template..."></textarea>
+                    <small style="color: #6b7280; font-size: 11px;">
+                        <i class="fas fa-info-circle"></i> Placeholders: <code>{name}</code>, <code>{ticket_type}</code>, <code>{unique_id}</code>, <code>{total_guests}</code> — will be replaced per participant.
+                    </small>
+                </div>
                 
                 <!-- Resend checkbox -->
                 <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #166534; margin-bottom: 12px; cursor: pointer;">
@@ -505,6 +527,19 @@ const basePath = '<?= $basePath ?>';
 let pendingAction = null; // 'email' or 'sms'
 let pendingSendAll = false;
 
+// Pre-fill SMS invitation template
+<?php
+use App\Services\SmsService;
+$smsServiceForTemplate = new SmsService();
+$smsTemplate = $smsServiceForTemplate->getInvitationTemplate($event);
+?>
+document.addEventListener('DOMContentLoaded', function() {
+    const smsTemplateEl = document.getElementById('smsMessageTemplate');
+    if (smsTemplateEl) {
+        smsTemplateEl.value = <?= json_encode($smsTemplate, JSON_UNESCAPED_UNICODE) ?>;
+    }
+});
+
 function showModal(type, sendAll) {
     pendingAction = type;
     pendingSendAll = sendAll;
@@ -645,6 +680,7 @@ async function executeSmsSend() {
     const progressBar = document.getElementById('progressBar');
     const progressText = document.getElementById('progressText');
     const forceResend = document.getElementById('smsForceResend')?.checked || false;
+    const customMessage = document.getElementById('smsMessageTemplate')?.value || '';
     
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
@@ -661,7 +697,8 @@ async function executeSmsSend() {
             body: JSON.stringify({ 
                 event_id: eventId, 
                 send_to_all: pendingSendAll,
-                force_resend: forceResend
+                force_resend: forceResend,
+                custom_message: customMessage.trim() || null
             })
         });
         

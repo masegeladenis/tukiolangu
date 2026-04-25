@@ -34,6 +34,7 @@ $input = json_decode(file_get_contents('php://input'), true);
 $eventId = (int) ($input['event_id'] ?? 0);
 $participantIds = $input['participant_ids'] ?? [];
 $sendToAll = (bool) ($input['send_to_all'] ?? false);
+$customMessage = $input['custom_message'] ?? null;
 
 if ($eventId <= 0) {
     echo json_encode(['success' => false, 'message' => 'Invalid event ID']);
@@ -123,7 +124,11 @@ foreach ($participants as $participant) {
     }
     
     try {
-        $result = $smsService->sendInvitation($participant, $event);
+        if (!empty($customMessage)) {
+            $result = $smsService->sendCustomInvitation($participant, $customMessage);
+        } else {
+            $result = $smsService->sendInvitation($participant, $event);
+        }
         
         // Log the SMS
         $db->execute("
